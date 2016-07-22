@@ -1,7 +1,7 @@
 {
   "name": "awhere",
   "description": "Node.js module for aWhere APIs.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Lasha Tavartkiladze (coloraggio)",
   "license": "MIT",
   "repository": "Elva/awhere",
