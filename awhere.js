@@ -30,6 +30,9 @@ var aWhereToken = null;
 var aWhereTokenExpiresAt = null;
 var aWhereTokenRequestMaxRetries = 5;
 var aWhereTokenRequestRetries = 0;
+var aWhereFieldIdNamespace = 'awherejs_field_';
+var aWhereFieldsMap = {};
+var aWhereFieldsFetched = false;
 
 
 
@@ -39,7 +42,7 @@ var aWhereTokenRequestRetries = 0;
 var aWhere = {};
 
 aWhere.key = null;
-aWhere.secret = null;;
+aWhere.secret = null;
 
 
 
@@ -64,7 +67,7 @@ aWhere.getField = function (params, callback) {
 };
 
 aWhere.createField = function (params, callback) {
-    params.id = params.id || '_field_' + Date.now();
+    params.id = params.id || aWhereFieldIdNamespace + uniqueId();
 
     aWhereRequest({
         method: 'POST',
@@ -188,37 +191,78 @@ aWhere.deletePlanting = function (params, callback) {
 //
 
 aWhere.getCurrentConditions = function (params, callback) {
-    aWhereRequest({
-        path: '/v2/weather/fields/' + params.fieldId + '/currentconditions'
-    }, params, aWhereCallback(callback));
+    function req(fieldId) {
+        aWhereRequest({
+            path: '/v2/weather/fields/' + fieldId + '/currentconditions'
+        }, params, aWhereCallback(callback));
+    }
+    if (params.lat && params.lng) {
+        delete params.fieldId;
+        getFieldByLatLng(params.lat, params.lng, function (err, field) {
+            if (err) { return callback(err); }
+            req(field.id);
+        });
+    } else if (params.fieldId) {
+        delete params.lat;
+        delete params.lng;
+        req(params.fieldId);
+    }
 };
 
 aWhere.getForecasts = function (params, callback) {
-    var path = '/v2/weather/fields/' + params.fieldId + '/forecasts';
-    var date = '';
+    function req(fieldId) {
+        var path = '/v2/weather/fields/' + fieldId + '/forecasts';
+        var date = '';
 
-    if (params.date) {
-        date = aWhere.formatDate(params.date);
-        path += '/' + date + ',' + date;
+        if (params.date) {
+            date = aWhere.formatDate(params.date);
+            path += '/' + date + ',' + date;
+        }
+
+        aWhereRequest({
+            path: path
+        }, params, aWhereCallback(callback));
     }
 
-    aWhereRequest({
-        path: path
-    }, params, aWhereCallback(callback));
+    if (params.lat && params.lng) {
+        delete params.fieldId;
+        getFieldByLatLng(params.lat, params.lng, function (err, field) {
+            if (err) { return callback(err); }
+            req(field.id);
+        });
+    } else if (params.fieldId) {
+        delete params.lat;
+        delete params.lng;
+        req(params.fieldId);
+    }
 };
 
 aWhere.getObservations = function (params, callback) {
-    var path = '/v2/weather/fields/' + params.fieldId + '/observations';
+    function req(fieldId) {
+        var path = '/v2/weather/fields/' + fieldId + '/observations';
     
-    if (params.startDate && params.endDate) {
-        path += '/' + params.startDate + ',' + params.endDate;
+        if (params.startDate && params.endDate) {
+            path += '/' + params.startDate + ',' + params.endDate;
+        }
+
+        params.limit = params.limit || 120;
+
+        aWhereRequest({
+            path: path
+        }, params, aWhereCallback(callback));
     }
 
-    params.limit = params.limit || 120;
-
-    aWhereRequest({
-        path: path
-    }, params, aWhereCallback(callback));
+    if (params.lat && params.lng) {
+        delete params.fieldId;
+        getFieldByLatLng(params.lat, params.lng, function (err, field) {
+            if (err) { return callback(err); }
+            req(field.id);
+        });
+    } else if (params.fieldId) {
+        delete params.lat;
+        delete params.lng;
+        req(params.fieldId);
+    }
 };
 
 
@@ -327,9 +371,6 @@ module.exports = aWhere;
 //
 
 
-//
-// 
-//
 function aWhereApiToken(callback) {
     var date = new Date();
 
@@ -375,17 +416,11 @@ function aWhereApiToken(callback) {
 }
 
 
-//
-// 
-//
 function aWhereSuccessCode(code) {
     return code === 200 || code === 201 || code === 204;
 }
 
 
-//
-// 
-//
 function aWhereRequest(options, params, callback) {
     aWhereApiToken(function (err, token) {
         if (err) { callback(err);  return console.error(err); }
@@ -417,9 +452,6 @@ function aWhereRequest(options, params, callback) {
 }
 
 
-//
-// 
-//
 function aWhereBatchRequests(requests, callback) {
     /* Uselss! Their batch job implementation is VERY SLOW!!! */
     function getJobResults(jobId) {
@@ -456,9 +488,45 @@ function aWhereBatchRequests(requests, callback) {
 }
 
 
-//
-//
-//
+function getFieldByLatLng(lat, lng, callback) {
+    if (!isFunction(callback) || !lat || !lng) { return; }
+
+    function appendFieldToFieldMap(field) {
+        var key = field.centerPoint.latitude + ',' + field.centerPoint.longitude;
+        aWhereFieldsMap[key] = field;
+    }
+
+    function getOrCreateField() {
+        var key = lat + ',' + lng;
+
+        if (aWhereFieldsMap[key]) {
+            callback(null, aWhereFieldsMap[key]);
+        } else {
+            aWhere.createField({ lat: lat, lng: lng }, function (err, field) {
+                if (!err && field) {
+                    appendFieldToFieldMap(field);
+                }
+                callback(err, field);
+            });
+        }
+    }
+
+    if (!aWhereFieldsFetched) {
+        aWhere.getFields(function (err, response) {
+            if (err || !response.fields) { 
+                callback(err); 
+            } else {
+                response.fields.forEach(appendFieldToFieldMap);
+                aWhereFieldsFetched = true;
+                getOrCreateField();
+            }
+        });
+    } else {
+        getOrCreateField();
+    }
+}
+
+
 function aWhereCallback(callback) {
     return function (err, response) {
         if (isFunction(callback)) {
@@ -611,6 +679,14 @@ function merge() {
 //
 function padZero(num) {
     return num < 10 ? '0' + num : num;
+}
+
+
+//
+// Pseudo unique id generator.
+//
+function uniqueId() {
+    return Math.round(Math.random() * Date.now()).toString(36);
 }
 
 
