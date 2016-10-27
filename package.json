@@ -1,9 +1,9 @@
 {
   "name": "awhere",
+  "main": "awhere.js",
   "description": "Node.js module for aWhere APIs.",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "author": "Lasha Tavartkiladze (coloraggio)",
   "license": "MIT",
-  "repository": "Traktor/awhere",
-  "bin": "./awhere.js"
+  "repository": "Traktor/awhere"
 }
