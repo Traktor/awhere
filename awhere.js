@@ -50,52 +50,65 @@ aWhere.secret = null;
 // Fields
 //
 
-aWhere.getFields = function (params, callback) {
+aWhere.getFields = function () {
+    var params, callback;
+
     if (arguments.length === 1) {
-        callback = params;
-        params = {};
+        params   = {};
+        callback = arguments[0];
+    } else {
+        params   = arguments[0];
+        callback = arguments[1];
     }
+
     aWhereRequest({
         path: '/v2/fields'
-    }, params, aWhereCallback(callback));
+    }, params, wrapCallback(callback));
 };
 
 aWhere.getField = function (params, callback) {
     aWhereRequest({
         path: '/v2/fields/' + params.id
-    }, params, aWhereCallback(callback));
+    }, params, wrapCallback(callback));
 };
 
 aWhere.createField = function (params, callback) {
     params.id = params.id || aWhereFieldIdNamespace + uniqueId();
 
-    aWhereRequest({
-        method: 'POST',
-        path: '/v2/fields'
-    }, {
+    var aWhereParams = {
         id: params.id,
         farmId: params.farmId || params.farm_id || params.id,
         name: params.name || 'Untitled field',
-        acres: params.acres || (params.hectare ? parseFloat(params.hectare) * ACRES_IN_HECTARE : undefined),
+        acres: 1,
         centerPoint: params.centerPoint || params.center_point || {
             latitude: params.lat || 0,
             longitude: params.lng || 0,
-        },
-    }, aWhereCallback(callback));
+        }
+    };
+
+    aWhereRequest({
+        method: 'POST',
+        path: '/v2/fields'
+    }, aWhereParams, function (err, response) {
+        if (err) {
+            err.paramsSent = aWhereParams;
+        }
+        wrapCallback(callback)(err, response);
+    });
 };
 
 aWhere.updateField = function (pathParams, params, callback) {
     aWhereRequest({
         method: 'PATCH',
         path: '/v2/fields/' + pathParams.id
-    }, params, aWhereCallback(callback));
+    }, params, wrapCallback(callback));
 };
 
 aWhere.deleteField = function (params, callback) {
     aWhereRequest({
         method: 'DELETE',
         path: '/v2/fields/' + params.id
-    }, {}, aWhereCallback(callback));
+    }, {}, wrapCallback(callback));
 };
 
 
@@ -130,7 +143,7 @@ aWhere.getPlantings = function (params, callback) {
 
     aWhereRequest({
         path: path
-    }, params, aWhereCallback(callback));
+    }, params, wrapCallback(callback));
 };
 
 aWhere.getOrCreatePlanting = function (params, callback) {
@@ -154,7 +167,7 @@ aWhere.createPlanting = function (params, callback) {
     aWhereRequest({
         method: 'POST',
         path: '/v2/agronomics/fields/' + params.fieldId + '/plantings'
-    }, params, aWhereCallback(callback));
+    }, params, wrapCallback(callback));
 };
 
 aWhere.updatePlanting = function (pathParams, params, callback) {
@@ -164,7 +177,7 @@ aWhere.updatePlanting = function (pathParams, params, callback) {
     // aWhereRequest({
     //     method: Array.isArray(params) ? 'PATCH' : 'PUT',
     //     path: '/v2/agronomics/fields/' + pathParams.fieldId + '/plantings/' + (pathParams.plantingId || 'current')
-    // }, params, aWhereCallback(callback));
+    // }, params, wrapCallback(callback));
 
     aWhere.deletePlanting(pathParams, function (err, response) {
         if (err) {
@@ -181,7 +194,7 @@ aWhere.deletePlanting = function (params, callback) {
     aWhereRequest({
         method: 'DELETE',
         path: '/v2/agronomics/fields/' + params.fieldId + '/plantings/' + (params.plantingId || 'current')
-    }, {}, aWhereCallback(callback));
+    }, {}, wrapCallback(callback));
 };
 
 
@@ -194,7 +207,7 @@ aWhere.getCurrentConditions = function (params, callback) {
     function req(fieldId) {
         aWhereRequest({
             path: '/v2/weather/fields/' + fieldId + '/currentconditions'
-        }, params, aWhereCallback(callback));
+        }, params, wrapCallback(callback));
     }
     if (params.lat && params.lng) {
         delete params.fieldId;
@@ -221,7 +234,7 @@ aWhere.getForecasts = function (params, callback) {
 
         aWhereRequest({
             path: path
-        }, params, aWhereCallback(callback));
+        }, params, wrapCallback(callback));
     }
 
     if (params.lat && params.lng) {
@@ -249,7 +262,7 @@ aWhere.getObservations = function (params, callback) {
 
         aWhereRequest({
             path: path
-        }, params, aWhereCallback(callback));
+        }, params, wrapCallback(callback));
     }
 
     if (params.lat && params.lng) {
@@ -316,13 +329,13 @@ aWhere.getModels = function (params, callback) {
 aWhere.getAgronomicValues = function (params, callback) {
     aWhereRequest({
         path: '/v2/agronomics/fields/' + params.fieldId + '/agronomicvalues'
-    }, params, aWhereCallback(callback));
+    }, params, wrapCallback(callback));
 };
 
 aWhere.getModelResults = function (params, callback) {
     aWhereRequest({
         path: '/v2/agronomics/fields/' + params.fieldId + '/models/' + params.modelId + '/results'
-    }, params, aWhereCallback(callback));
+    }, params, wrapCallback(callback));
 };
 
 
@@ -423,7 +436,9 @@ function aWhereSuccessCode(code) {
 
 function aWhereRequest(options, params, callback) {
     aWhereApiToken(function (err, token) {
-        if (err) { callback(err);  return console.error(err); }
+        if (err) { 
+            return wrapCallback(callback)(err); 
+        }
 
         options = merge({
             hostname: 'api.awhere.com',
@@ -435,17 +450,20 @@ function aWhereRequest(options, params, callback) {
         }, options);
 
         request(options, params, function (err, response) {
-            if (err || !aWhereSuccessCode(response.status.code)) {
-                callback(err || response.status, response.body);
-            } else {
-                try {
-                    if (response.body) {
-                        response.body = JSON.parse(response.body);
-                    }
+            if (err) {
+                return wrapCallback(callback)(err, response);
+            }
+
+            try {
+                response.body = JSON.parse(response.body);
+
+                if (aWhereSuccessCode(response.status.code)) {
                     callback(null, response.body);
-                } catch (e) {
-                    callback(e, response);
+                } else {
+                    callback(response.body, null);
                 }
+            } catch (e) {
+                callback(e, response);
             }
         });
     });
@@ -527,7 +545,7 @@ function getFieldByLatLng(lat, lng, callback) {
 }
 
 
-function aWhereCallback(callback) {
+function wrapCallback(callback) {
     return function (err, response) {
         if (isFunction(callback)) {
             if (err) { 
