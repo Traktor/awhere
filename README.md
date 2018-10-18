@@ -1,6 +1,6 @@
-# awhere
-Node.js module for interacting with aWhere APIs.
-
+* * *
+This library is no longer maintained. Use it at your own risk.
 * * *
 
-Work in progress...
+# awhere
+Node.js module for interacting with aWhere APIs.
