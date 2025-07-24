@@ -3,7 +3,7 @@
   "main": "awhere.js",
   "description": "Node.js module for aWhere APIs.",
   "version": "0.0.6",
-  "author": "Lasha Tavartkiladze (coloraggio)",
+  "author": "Lasha Tavartkiladze (ltbits)",
   "license": "MIT",
   "repository": "Traktor/awhere"
 }

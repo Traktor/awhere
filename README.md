@@ -1,6 +1,2 @@
-* * *
-This library is no longer maintained. Use it at your own risk.
-* * *
-
-# awhere
+# `awhere`
 Node.js module for interacting with aWhere APIs.
